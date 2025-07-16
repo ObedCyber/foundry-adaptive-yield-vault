@@ -39,7 +39,7 @@ contract RoboVaultTest is Test {
         assertEq(aliceShares, vault.getTotalSharesOfUser(alice));
     }
 
-    function testUSerCanWithdrawFromVault() public {
+    function testUserCanWithdrawFromVault() public {
         vm.startPrank(alice);
         usdc.approve(address(vault), usdc.balanceOf(alice));
         uint256 aliceShares = vault.depositWithSlippageCheck(DEPOSIT_AMOUNT, DEPOSIT_AMOUNT);
