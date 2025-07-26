@@ -44,10 +44,10 @@ Absolutely, Obed. Here's a complete and structured **TODO list** that walks you 
 
 #### ⚙️ Base Strategy Interface
 
-* [ ] Create `BaseStrategy.sol` interface or abstract contract
+* [ ✅ ] Create `BaseStrategy.sol` interface or abstract contract
 
   * Required functions: `deposit(uint256)`, `withdraw(uint256)`, `estimateAPY()`
-* [ ] Implement proper access control to allow only the vault to interact
+* [ ✅ ] Implement proper access control to allow only the vault to interact
 
 ---
 
