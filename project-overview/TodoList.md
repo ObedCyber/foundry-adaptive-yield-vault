@@ -55,14 +55,14 @@ Absolutely, Obed. Here's a complete and structured **TODO list** that walks you 
 
 #### 🧸 Mock Strategies
 
-* [ ] Build `MockStrategyA` and `MockStrategyB`
+* [ ✅ ] Build `MockStrategyA` and `MockStrategyB`
 
   * Set fake APYs (e.g., 5%, 8%)
   * Track internal balances for deposits/withdrawals
 
 #### (Optional) Real DeFi Strategies
 
-* [ ] Integrate a live protocol (e.g., Aave or Compound) as `AaveStrategy`
+* [ 🟨 ] Integrate a live protocol (e.g., Aave or Compound) as `AaveStrategy`
 
 ---
 

@@ -22,8 +22,8 @@ abstract contract BaseStrategy {
     /// @notice Emergency withdraw all funds back to the vault
     function emergencyWithdraw() external virtual returns (uint256);
 
-    /// @notice Claim yield or profits from the strategy
-    function harvest() external virtual returns (uint256);
+    /// @notice Returns the balance of underlying in the strategy 
+    function getVaultBalance() external virtual view returns (uint256);
 
     /// @notice Estimate the current APY of the strategy
     function estimateAPY() external view virtual returns (uint256);

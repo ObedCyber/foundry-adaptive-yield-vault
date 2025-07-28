@@ -5,8 +5,9 @@ import {BaseStrategy} from "./BaseStrategy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract Mockstrategy is BaseStrategy, ERC20 {
+contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
 
     using SafeERC20 for IERC20;
 
@@ -14,24 +15,29 @@ contract Mockstrategy is BaseStrategy, ERC20 {
     uint256 immutable APY;
     uint256 constant APY_PRECISION = 1e18;
     address vault;
-    address underlying;
+    address immutable underlying;
     uint256 vaultBalance;
     uint256 lastDepositTimestamp;
-    uint256 constant interestPeriod = 60 seconds;
+    uint256 lastAccruedInterestTimestamp;
+    uint256 constant interestPeriod = 1 days;
     uint256 withdrawalPeriod = 21 days;
     
 
     error InvalidAmount();
+    error NonZeroAddress();
     error NotVault();
     error InsufficientAllowance();
     error InvalidWithdrawalPeriod();
+    error InsufficientBalance();
 
     event WithdrawSuccessful(address indexed vault, uint256 indexed amount);
     event DepositSuccessful(address indexed vault, uint256 indexed amount);
+    event EmergencyWithdrawSuccessful(address indexed vault, uint256 indexed amount);
 
     constructor(string memory _vaultName, uint256 _APY, address _vault, address _underlying)
     BaseStrategy(_vault)
     ERC20("MockShares","MCK") {
+        if(_vault == address(0) || _underlying == address(0)) revert NonZeroAddress();
         vaultName = _vaultName;
         APY = _APY;
         vault = _vault;
@@ -44,7 +50,7 @@ contract Mockstrategy is BaseStrategy, ERC20 {
         _;
     } 
 
-    function deposit(uint256 assets) external override onlyVault returns (uint256) {
+    function deposit(uint256 assets) nonReentrant external override onlyVault returns (uint256) {
         if (assets == 0) revert InvalidAmount();
 
         if (IERC20(underlying).allowance(msg.sender, address(this)) < assets) {
@@ -61,7 +67,8 @@ contract Mockstrategy is BaseStrategy, ERC20 {
         return assets;
     }
 
-    function withdraw(uint256 assets) external override returns (uint256) {
+    function withdraw(uint256 assets) nonReentrant external override onlyVault returns (uint256) {
+    accrueInterest();
     if (assets == 0) revert InvalidAmount();
     if (block.timestamp - lastDepositTimestamp <= withdrawalPeriod) revert InvalidWithdrawalPeriod();
 
@@ -69,7 +76,7 @@ contract Mockstrategy is BaseStrategy, ERC20 {
 
     // Handle full withdrawal
     if (assets == type(uint256).max) {
-        amountToWithdraw = IERC20(underlying).balanceOf(vault);
+        amountToWithdraw = vaultBalance;
         vaultBalance = 0;
         lastDepositTimestamp = 0;
     } else {
@@ -81,15 +88,48 @@ contract Mockstrategy is BaseStrategy, ERC20 {
     emit WithdrawSuccessful(vault, amountToWithdraw);
 
     return amountToWithdraw;
-}
-
-
-    function estimateAPY() external view override returns (uint256) {
-        return APY;
     }
+
+    function emergencyWithdraw() nonReentrant external override  onlyVault returns (uint256) {
+        accrueInterest();
+        // uint256 balance = IERC20(underlying).balanceOf(vault);
+        if (vaultBalance == 0) revert InsufficientBalance();
+
+        _burn(vault, balanceOf(vault)); // burn all vault's shares
+
+        vaultBalance = 0;
+        lastDepositTimestamp = 0;
+
+        IERC20(underlying).safeTransfer(vault, vaultBalance);
+        emit EmergencyWithdrawSuccessful(vault, vaultBalance);
+
+        return vaultBalance;
+    }
+
+    // interest only accumulates after every 60 seconds
+    function accrueInterest() internal {
+        if(block.timestamp - lastAccruedInterestTimestamp < interestPeriod)
+        {
+            return;
+        }
+
+        // how much he earns in a year
+        uint256 yearlyInterest = (vaultBalance * 1e18 * APY ) / APY_PRECISION; // (2 ether * 1e18 * 10e18) / 1e18 = 20 ether * 1e18
+        uint256 interestEarned = (yearlyInterest * interestPeriod) / 365 ;
+        vaultBalance += interestEarned;
+        lastAccruedInterestTimestamp = block.timestamp;
+    }   
+
 
     function strategyName() external view override returns (string memory) {
         return vaultName;
     }
 
+    function estimateAPY() external view override returns (uint256) {
+        return APY;
+    }
+
+    function getVaultBalance() external override view returns (uint256){
+        return vaultBalance;
+    }
 }
