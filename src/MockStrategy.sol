@@ -14,7 +14,7 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
     string public vaultName;
     uint256 immutable APY;
     uint256 constant APY_PRECISION = 1e18;
-    address vault;
+    address immutable i_manager;
     address immutable underlying;
     uint256 vaultBalance;
     uint256 lastDepositTimestamp;
@@ -34,23 +34,24 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
     event DepositSuccessful(address indexed vault, uint256 indexed amount);
     event EmergencyWithdrawSuccessful(address indexed vault, uint256 indexed amount);
 
-    constructor(string memory _vaultName, uint256 _APY, address _vault, address _underlying)
+    constructor(string memory _vaultName, uint256 _APY, address _vault, address strategyManager, address _underlying)
     BaseStrategy(_vault)
     ERC20("MockShares","MCK") {
         if(_vault == address(0) || _underlying == address(0)) revert NonZeroAddress();
         vaultName = _vaultName;
         APY = _APY;
-        vault = _vault;
+        i_vault = _vault;
+        i_manager = strategyManager;
         underlying = _underlying;
     }
 
-    /// @dev Restricts access to only the vault
-    modifier onlyVault() {
-        if (msg.sender != i_vault) revert NotVault();
+    /// @dev Restricts access to only the manager
+    modifier onlyManager() {
+        if (msg.sender != i_manager) revert NotVault();
         _;
     } 
 
-    function deposit(uint256 assets) nonReentrant external override onlyVault returns (uint256) {
+    function deposit(uint256 assets) nonReentrant external override onlyManager returns (uint256) {
         if (assets == 0) revert InvalidAmount();
 
         if (IERC20(underlying).allowance(msg.sender, address(this)) < assets) {
@@ -67,7 +68,7 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
         return assets;
     }
 
-    function withdraw(uint256 assets) nonReentrant external override onlyVault returns (uint256) {
+    function withdraw(uint256 assets) nonReentrant external override onlyManager returns (uint256) {
     accrueInterest();
     if (assets == 0) revert InvalidAmount();
     if (block.timestamp - lastDepositTimestamp <= withdrawalPeriod) revert InvalidWithdrawalPeriod();
@@ -90,7 +91,7 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
     return amountToWithdraw;
     }
 
-    function emergencyWithdraw() nonReentrant external override  onlyVault returns (uint256) {
+    function emergencyWithdraw() nonReentrant external override  onlyManager returns (uint256) {
         accrueInterest();
         // uint256 balance = IERC20(underlying).balanceOf(vault);
         if (vaultBalance == 0) revert InsufficientBalance();
