@@ -19,4 +19,7 @@ contract Errors {
 
     // errors for withdraw slippage being excedeed
     error WithdrawSlippageExceeded();
+    
+    // error for withdrawal delay not met
+    error WithdrawalDelayNotMet();
 }

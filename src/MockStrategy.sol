@@ -16,7 +16,7 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
     uint256 constant APY_PRECISION = 1e18;
     address immutable i_manager;
     address immutable underlying;
-    uint256 vaultBalance;
+    uint256 managerBalance;
     uint256 lastDepositTimestamp;
     uint256 lastAccruedInterestTimestamp;
     uint256 constant interestPeriod = 1 days;
@@ -25,7 +25,7 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
 
     error InvalidAmount();
     error NonZeroAddress();
-    error NotVault();
+    error NotManager();
     error InsufficientAllowance();
     error InvalidWithdrawalPeriod();
     error InsufficientBalance();
@@ -47,7 +47,7 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
 
     /// @dev Restricts access to only the manager
     modifier onlyManager() {
-        if (msg.sender != i_manager) revert NotVault();
+        if (msg.sender != i_manager) revert NotManager();
         _;
     } 
 
@@ -58,13 +58,13 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
             revert InsufficientAllowance();
         }
 
-        vaultBalance += assets;
+        managerBalance += assets;
         lastDepositTimestamp = block.timestamp;
 
-        IERC20(underlying).safeTransferFrom(vault, address(this), assets);
+        IERC20(underlying).safeTransferFrom(i_manager, address(this), assets);
  
         _mint(msg.sender, assets); // naive 1:1, replace with share calc later
-        emit DepositSuccessful(vault, assets);
+        emit DepositSuccessful(i_manager, assets);
         return assets;
     }
 
@@ -77,16 +77,16 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
 
     // Handle full withdrawal
     if (assets == type(uint256).max) {
-        amountToWithdraw = vaultBalance;
-        vaultBalance = 0;
+        amountToWithdraw = managerBalance;
+        managerBalance = 0;
         lastDepositTimestamp = 0;
     } else {
-        vaultBalance -= amountToWithdraw;
+        managerBalance -= amountToWithdraw;
     }
 
-    _burn(vault, amountToWithdraw);
-    IERC20(underlying).safeTransfer(vault, amountToWithdraw);
-    emit WithdrawSuccessful(vault, amountToWithdraw);
+    _burn(i_manager, amountToWithdraw);
+    IERC20(underlying).safeTransfer(i_manager, amountToWithdraw);
+    emit WithdrawSuccessful(i_manager, amountToWithdraw);
 
     return amountToWithdraw;
     }
@@ -94,17 +94,17 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
     function emergencyWithdraw() nonReentrant external override  onlyManager returns (uint256) {
         accrueInterest();
         // uint256 balance = IERC20(underlying).balanceOf(vault);
-        if (vaultBalance == 0) revert InsufficientBalance();
+        if (managerBalance == 0) revert InsufficientBalance();
 
         _burn(vault, balanceOf(vault)); // burn all vault's shares
 
-        vaultBalance = 0;
+        managerBalance = 0;
         lastDepositTimestamp = 0;
 
-        IERC20(underlying).safeTransfer(vault, vaultBalance);
-        emit EmergencyWithdrawSuccessful(vault, vaultBalance);
+        IERC20(underlying).safeTransfer(vault, managerBalance);
+        emit EmergencyWithdrawSuccessful(vault, managerBalance);
 
-        return vaultBalance;
+        return managerBalance;
     }
 
     // interest only accumulates after every 60 seconds
@@ -115,9 +115,9 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
         }
 
         // how much he earns in a year
-        uint256 yearlyInterest = (vaultBalance * 1e18 * APY ) / APY_PRECISION; // (2 ether * 1e18 * 10e18) / 1e18 = 20 ether * 1e18
+        uint256 yearlyInterest = (managerBalance * 1e18 * APY ) / APY_PRECISION; // (2 ether * 1e18 * 10e18) / 1e18 = 20 ether * 1e18
         uint256 interestEarned = (yearlyInterest * interestPeriod) / 365 ;
-        vaultBalance += interestEarned;
+        managerBalance += interestEarned;
         lastAccruedInterestTimestamp = block.timestamp;
     }   
 
@@ -131,6 +131,7 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
     }
 
     function getVaultBalance() external override view returns (uint256){
-        return vaultBalance;
+        accrueInterest();
+        return managerBalance;
     }
 }
