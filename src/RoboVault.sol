@@ -5,11 +5,12 @@ import {ERC4626} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.so
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Errors} from "./Errors.sol";
 import {IStrategyManager} from "./IStrategyManager.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract RoboVault is ERC4626, ReentrancyGuard, Errors{
+contract RoboVault is ERC4626, ReentrancyGuard, Errors, Ownable{
 
     event Deposited(address indexed user, uint256 amount, uint256 timestamp);
     event Withdrawn(address indexed user, uint256 shares, uint256 timestamp);
@@ -19,24 +20,22 @@ contract RoboVault is ERC4626, ReentrancyGuard, Errors{
     IStrategyManager public strategyManager;
     mapping (address => uint256) public userDeposits;
     mapping (address => uint256) public userLastDepositTimestamp;
-    uint256 public constant WITHDRAWAL_DELAY;
+    uint256 public WITHDRAWAL_DELAY;
 
-    constructor(address _asset, uint256 withdrawalDelay, address strategyManager) ERC4626(IERC20(_asset)) ERC20("RoboVault","ROBO"){
-        if(_asset == address(0)) revert ZeroAddress();
-        if(strategyManager == address(0)) revert ZeroAddress();
-        if(withdrawalDelay == 0) revert InvalidWithdrawalDelay();
+    constructor(address _asset, uint256 withdrawalDelay ) ERC4626(IERC20(_asset)) ERC20("RoboVault","ROBO") Ownable(msg.sender){
+        if(_asset == address(0)) revert RoboVault__ZeroAddress();
+        if(withdrawalDelay == 0) revert RoboVault__InvalidWithdrawalDelay();
         underlyingAsset = IERC20(_asset);
         WITHDRAWAL_DELAY = withdrawalDelay;
-        strategyManager = IStrategyManager(strategyManager);
     }
     
     function depositWithSlippageCheck(uint256 amount, uint256 minimumOutputShares) external nonReentrant returns(uint256){
-        if(amount == 0) revert InvalidAmount();
-        if(amount < i_minimumDeposit) revert DepositTooSmall();
+        if(amount == 0) revert RoboVault__InvalidAmount();
+        if(amount < i_minimumDeposit) revert RoboVault__DepositTooSmall();
         userDeposits[msg.sender] += amount;
         userLastDepositTimestamp[msg.sender] = block.timestamp;
         uint256 userShares = deposit(amount, msg.sender);
-        if (userShares < minimumOutputShares) revert DepositSlippageExceeded();
+        if (userShares < minimumOutputShares) revert RoboVault__DepositSlippageExceeded();
         emit Deposited(msg.sender, amount, block.timestamp);
         return userShares;
     }
@@ -49,10 +48,10 @@ contract RoboVault is ERC4626, ReentrancyGuard, Errors{
         address user = msg.sender;
         uint256 amountToReceive = previewWithdraw(shares);
 
-        if (shares == 0) revert InvalidAmount();
-        if (shares > balanceOf(user)) revert InsufficientShares();
+        if (shares == 0) revert RoboVault__InvalidAmount();
+        if (shares > balanceOf(user)) revert RoboVault__InsufficientShares();
         if (block.timestamp < userLastDepositTimestamp[user] + WITHDRAWAL_DELAY) 
-            revert WithdrawalDelayNotMet();
+            revert RoboVault__WithdrawalDelayNotMet();
 
         userDeposits[user] -= amountToReceive;
 
@@ -70,7 +69,7 @@ contract RoboVault is ERC4626, ReentrancyGuard, Errors{
         }
 
         uint256 assetsReceived = redeem(shares, user, user);
-        if (assetsReceived < minimumOutputAssets) revert WithdrawSlippageExceeded();
+        if (assetsReceived < minimumOutputAssets) revert RoboVault__WithdrawSlippageExceeded();
 
         emit Withdrawn(user, assetsReceived, block.timestamp);
         return assetsReceived;
@@ -84,6 +83,13 @@ contract RoboVault is ERC4626, ReentrancyGuard, Errors{
         return idleBalance + balanceAccrossStrategies;
     }
 
+    // can only be set once by the owner
+    function setStrategyManager(address _strategyManager) external onlyOwner{
+        if(_strategyManager == address(0)) revert RoboVault__ZeroAddress();
+        if( address(strategyManager) != address(0)) revert RoboVault__ManagerAlreadyExists();
+        strategyManager = IStrategyManager(_strategyManager);
+    }
+
     function getTotalSharesOfUser(address user) external view returns(uint256){
         return balanceOf(user);
     }
@@ -92,7 +98,7 @@ contract RoboVault is ERC4626, ReentrancyGuard, Errors{
         return address(underlyingAsset);
     }
 
-    function getMinimumDeposit() external view returns(uint256){
+    function getMinimumDeposit() external pure returns(uint256){
         return i_minimumDeposit;
     }
     function getUserDeposit(address user) external view returns(uint256){

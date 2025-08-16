@@ -5,13 +5,6 @@ pragma solidity ^0.8.24;
 
 abstract contract BaseStrategy {
     /// @notice Vault that controls this strategy
-    address immutable i_vault;
-
-    constructor(address _vault) {
-        i_vault = _vault;
-    }
-
-
 
     /// @notice Deposit assets into the strategy
     function deposit(uint256 assets) external virtual returns(uint256 sharesMinted);
@@ -23,7 +16,7 @@ abstract contract BaseStrategy {
     function emergencyWithdraw() external virtual returns (uint256);
 
     /// @notice Returns the balance of underlying in the strategy 
-    function getVaultBalance() external virtual view returns (uint256);
+    function getVaultBalance() external virtual returns (uint256);
 
     /// @notice Estimate the current APY of the strategy
     function estimateAPY() external view virtual returns (uint256);

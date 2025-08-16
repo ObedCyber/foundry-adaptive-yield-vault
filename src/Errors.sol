@@ -3,23 +3,29 @@ pragma solidity ^0.8.24;
 
 contract Errors {
     // error for zero address
-    error ZeroAddress();
+    error RoboVault__ZeroAddress();
 
     // error for invalid amount
-    error InvalidAmount();
+    error RoboVault__InvalidAmount();
 
     // error for deposit below required deposit
-    error DepositTooSmall();
+    error RoboVault__DepositTooSmall();
 
     // error for deposit slippage being exceded
-    error DepositSlippageExceeded();
+    error RoboVault__DepositSlippageExceeded();
 
     // error for insufficient shares in user balance
-    error InsufficientShares();
+    error RoboVault__InsufficientShares();
 
     // errors for withdraw slippage being excedeed
-    error WithdrawSlippageExceeded();
+    error RoboVault__WithdrawSlippageExceeded();
     
     // error for withdrawal delay not met
-    error WithdrawalDelayNotMet();
+    error RoboVault__WithdrawalDelayNotMet();
+
+    // error for invalid withdrawal delay
+    error RoboVault__InvalidWithdrawalDelay();
+
+    // error for setting the manager address
+    error RoboVault__ManagerAlreadyExists();
 }

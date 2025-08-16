@@ -11,7 +11,7 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
 
     using SafeERC20 for IERC20;
 
-    string public vaultName;
+    string public StrategyName;
     uint256 immutable APY;
     uint256 constant APY_PRECISION = 1e18;
     address immutable i_manager;
@@ -30,17 +30,15 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
     error InvalidWithdrawalPeriod();
     error InsufficientBalance();
 
-    event WithdrawSuccessful(address indexed vault, uint256 indexed amount);
-    event DepositSuccessful(address indexed vault, uint256 indexed amount);
-    event EmergencyWithdrawSuccessful(address indexed vault, uint256 indexed amount);
+    event WithdrawSuccessful(address indexed manager, uint256 amount, uint256 indexed timestamp);
+    event DepositSuccessful(address indexed manager, uint256  amount, uint256 indexed timestamp);
+    event EmergencyWithdrawSuccessful(address indexed manager, uint256  amount, uint256 indexed timestamp);
 
-    constructor(string memory _vaultName, uint256 _APY, address _vault, address strategyManager, address _underlying)
-    BaseStrategy(_vault)
+    constructor(string memory _strategyName, uint256 _APY, address strategyManager, address _underlying)
     ERC20("MockShares","MCK") {
-        if(_vault == address(0) || _underlying == address(0)) revert NonZeroAddress();
-        vaultName = _vaultName;
+        if(_underlying == address(0)) revert NonZeroAddress();
+        StrategyName = _strategyName;
         APY = _APY;
-        i_vault = _vault;
         i_manager = strategyManager;
         underlying = _underlying;
     }
@@ -64,7 +62,7 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
         IERC20(underlying).safeTransferFrom(i_manager, address(this), assets);
  
         _mint(msg.sender, assets); // naive 1:1, replace with share calc later
-        emit DepositSuccessful(i_manager, assets);
+        emit DepositSuccessful(i_manager, assets, block.timestamp);
         return assets;
     }
 
@@ -86,7 +84,7 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
 
     _burn(i_manager, amountToWithdraw);
     IERC20(underlying).safeTransfer(i_manager, amountToWithdraw);
-    emit WithdrawSuccessful(i_manager, amountToWithdraw);
+    emit WithdrawSuccessful(i_manager, amountToWithdraw, block.timestamp);
 
     return amountToWithdraw;
     }
@@ -96,13 +94,13 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
         // uint256 balance = IERC20(underlying).balanceOf(vault);
         if (managerBalance == 0) revert InsufficientBalance();
 
-        _burn(vault, balanceOf(vault)); // burn all vault's shares
+        _burn(i_manager, balanceOf(i_manager)); // burn all vault's shares
 
         managerBalance = 0;
         lastDepositTimestamp = 0;
 
-        IERC20(underlying).safeTransfer(vault, managerBalance);
-        emit EmergencyWithdrawSuccessful(vault, managerBalance);
+        IERC20(underlying).safeTransfer(i_manager, managerBalance);
+        emit EmergencyWithdrawSuccessful(i_manager, managerBalance, block.timestamp);
 
         return managerBalance;
     }
@@ -123,14 +121,14 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
 
 
     function strategyName() external view override returns (string memory) {
-        return vaultName;
+        return StrategyName;
     }
 
     function estimateAPY() external view override returns (uint256) {
         return APY;
     }
 
-    function getVaultBalance() external override view returns (uint256){
+    function getVaultBalance() external override returns (uint256){
         accrueInterest();
         return managerBalance;
     }
