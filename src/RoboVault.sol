@@ -9,8 +9,10 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Errors} from "./Errors.sol";
 import {IStrategyManager} from "./IStrategyManager.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract RoboVault is ERC4626, ReentrancyGuard, Errors, Ownable{
+    using SafeERC20 for IERC20;
 
     event Deposited(address indexed user, uint256 amount, uint256 timestamp);
     event Withdrawn(address indexed user, uint256 shares, uint256 timestamp);
@@ -90,6 +92,14 @@ contract RoboVault is ERC4626, ReentrancyGuard, Errors, Ownable{
         strategyManager = IStrategyManager(_strategyManager);
     }
 
+    // @dev function to transfer assets from the vault to the strategy manager
+    function transferToStrategyManager(uint256 amount) external onlyOwner {
+        if(amount == 0) revert RoboVault__InvalidAmount();
+        uint256 idleBalance = underlyingAsset.balanceOf(address(this));
+        if(amount > idleBalance) revert RoboVault__InsufficientIdleBalance();
+        underlyingAsset.safeTransfer(address(strategyManager), amount);
+    }
+
     function getTotalSharesOfUser(address user) external view returns(uint256){
         return balanceOf(user);
     }
@@ -100,9 +110,5 @@ contract RoboVault is ERC4626, ReentrancyGuard, Errors, Ownable{
 
     function getMinimumDeposit() external pure returns(uint256){
         return i_minimumDeposit;
-    }
-    function getUserDeposit(address user) external view returns(uint256){
-        return userDeposits[user];
-    }
-    
+    }    
 }

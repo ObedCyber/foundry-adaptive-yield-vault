@@ -322,11 +322,26 @@ contract StrategyManager is Ownable{
         return currentStrategyIndex;
     }
 
+    function getMinimumAPY() public view returns (uint256) {
+        return minimumAPY;
+    }
+
+    function getAPYGap() public view returns (uint256) {
+        return APYGap;
+    }
+
     // get strategy APY by index
     function getStrategyAPY(uint256 index) public view returns (uint256) {
         if (index >= strategies.length) {
             revert StrategyManager__InvalidIndex();
         }
         return strategies[index].lastRecordedAPY;
+    }
+
+    function checkIfStrategyIsActive(uint256 index) public view returns (bool) {
+        if (index >= strategies.length) {
+            revert StrategyManager__InvalidIndex();
+        }
+        return strategies[index].active;
     }
 }

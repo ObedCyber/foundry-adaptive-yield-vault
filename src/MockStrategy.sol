@@ -12,7 +12,7 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     string public StrategyName;
-    uint256 immutable APY;
+    uint256 public APY;
     uint256 constant APY_PRECISION = 1e18;
     address immutable i_manager;
     address immutable underlying;
@@ -29,12 +29,17 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
     error InsufficientAllowance();
     error InvalidWithdrawalPeriod();
     error InsufficientBalance();
+    error NotStrategy();
 
     event WithdrawSuccessful(address indexed manager, uint256 amount, uint256 indexed timestamp);
     event DepositSuccessful(address indexed manager, uint256  amount, uint256 indexed timestamp);
     event EmergencyWithdrawSuccessful(address indexed manager, uint256  amount, uint256 indexed timestamp);
 
-    constructor(string memory _strategyName, uint256 _APY, address strategyManager, address _underlying)
+    constructor(
+        string memory _strategyName, 
+        uint256 _APY, 
+        address strategyManager, 
+        address _underlying)
     ERC20("MockShares","MCK") {
         if(_underlying == address(0)) revert NonZeroAddress();
         StrategyName = _strategyName;
@@ -118,6 +123,15 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
         managerBalance += interestEarned;
         lastAccruedInterestTimestamp = block.timestamp;
     }   
+
+    // this function is just for testing purposes
+    function changeAPY(uint256 newAPY) external  {
+        if(msg.sender != address(this)){
+            revert NotStrategy();
+        }
+        if (newAPY == 0) revert InvalidAmount();
+        APY = newAPY;
+    }
 
 
     function strategyName() external view override returns (string memory) {

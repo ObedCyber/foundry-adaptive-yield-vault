@@ -28,4 +28,7 @@ contract Errors {
 
     // error for setting the manager address
     error RoboVault__ManagerAlreadyExists();
+
+    // error for insufficient idle balance in wallet
+    error RoboVault__InsufficientIdleBalance();
 }
