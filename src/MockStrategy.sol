@@ -13,7 +13,7 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
 
     string public StrategyName;
     uint256 public APY;
-    uint256 constant APY_PRECISION = 1e18;
+    uint256 constant APY_PRECISION = 100e18;
     address immutable i_manager;
     address immutable underlying;
     uint256 managerBalance;
@@ -49,7 +49,7 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
     }
 
     /// @dev Restricts access to only the manager
-    modifier onlyManager() {
+    modifier onlyManager() {    
         if (msg.sender != i_manager) revert NotManager();
         _;
     } 
@@ -101,25 +101,29 @@ contract Mockstrategy is BaseStrategy, ERC20, ReentrancyGuard {
 
         _burn(i_manager, balanceOf(i_manager)); // burn all vault's shares
 
+        uint256 amountToWithdraw = managerBalance;
+        // reset state
         managerBalance = 0;
         lastDepositTimestamp = 0;
 
-        IERC20(underlying).safeTransfer(i_manager, managerBalance);
-        emit EmergencyWithdrawSuccessful(i_manager, managerBalance, block.timestamp);
+        IERC20(underlying).safeTransfer(i_manager, amountToWithdraw);
+        emit EmergencyWithdrawSuccessful(i_manager, amountToWithdraw, block.timestamp);
 
-        return managerBalance;
+        return amountToWithdraw;
     }
 
     // interest only accumulates after every 60 seconds
+    // this is very buggy, in a real strategy It would implement the APY's from AAVE and compound.
     function accrueInterest() internal {
+        uint256 period =  block.timestamp - lastAccruedInterestTimestamp ;
         if(block.timestamp - lastAccruedInterestTimestamp < interestPeriod)
         {
             return;
         }
-
+            // (1e18 * 2000 * 1e18) / 100e18 = 20e18
         // how much he earns in a year
-        uint256 yearlyInterest = (managerBalance * 1e18 * APY ) / APY_PRECISION; // (2 ether * 1e18 * 10e18) / 1e18 = 20 ether * 1e18
-        uint256 interestEarned = (yearlyInterest * interestPeriod) / 365 ;
+        uint256 yearlyInterest = (managerBalance * 1e18 * APY ) / APY_PRECISION; 
+        uint256 interestEarned = (yearlyInterest * period) / 365 days; // 20e18 * 365 / 365 = 20e18
         managerBalance += interestEarned;
         lastAccruedInterestTimestamp = block.timestamp;
     }   

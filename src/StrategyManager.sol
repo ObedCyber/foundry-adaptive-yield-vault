@@ -27,7 +27,6 @@ contract StrategyManager is Ownable{
     address immutable i_vault;
     address public roboKeeper;
     uint256 minimumAPY;
-    uint256 public APYGap; // minimum APY difference (in basis points, e.g., 100 = 1%)
     uint256 public rebalanceCooldown; // cooldown period for rebalancing 
     uint256 public lastRebalanceTimestamp; // timestamp of the last rebalance
     StrategyData[] strategies;
@@ -81,13 +80,11 @@ contract StrategyManager is Ownable{
         address vault, 
         address owner, 
         uint256 minAPY, 
-        uint256 _APYGap,
         uint256 _rebalanceCooldown,
         address _underlying) Ownable(owner){
         i_vault = vault;
         minimumAPY = minAPY;
         rebalanceCooldown = _rebalanceCooldown;
-        APYGap = _APYGap;
         underlying = IERC20(_underlying);
     }
 
@@ -164,9 +161,6 @@ contract StrategyManager is Ownable{
         minimumAPY = newMinAPY;
     }
 
-    function updateAPYGap(uint256 newAPYGap) public onlyOwner {
-        APYGap = newAPYGap;
-    }
 
     function setRoboKeeper(address _roboKeeper) public onlyOwner{
 
@@ -227,10 +221,9 @@ contract StrategyManager is Ownable{
         // flow goes from strategy -> manager -> vault
         if (amount == 0) revert StrategyManager__InvalidAmount();
         address strategyAddr = getStrategyAddress(currentStrategyIndex);
-        if (amount > IStrategy(strategyAddr).getVaultBalance()) {
-            revert StrategyManager__InsufficientBalanceInStrategy();
+        if(IStrategy(strategyAddr).getVaultBalance() != 0){
+            IStrategy(strategyAddr).withdraw(amount);
         }
-        IStrategy(strategyAddr).withdraw(amount);
         underlying.safeTransfer(i_vault, amount); // transfer the withdrawn amount to the vault
         emit WithdrawalToVaultSuccessful(strategyAddr, amount);
     }
@@ -326,9 +319,10 @@ contract StrategyManager is Ownable{
         return minimumAPY;
     }
 
-    function getAPYGap() public view returns (uint256) {
-        return APYGap;
+    function getRoboKeeper() public view returns (address) {
+        return roboKeeper;
     }
+
 
     // get strategy APY by index
     function getStrategyAPY(uint256 index) public view returns (uint256) {

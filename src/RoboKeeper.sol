@@ -15,7 +15,10 @@ contract RoboKeeper is AutomationCompatibleInterface, Ownable {
 
     IStrategyManager public strategyManager;
 
-    constructor(uint256 _yieldDeviation, address _strategyManager, uint256 _rebalanceCooldown)Ownable(msg.sender){
+    constructor(
+        uint256 _yieldDeviation, 
+        address _strategyManager, 
+        uint256 _rebalanceCooldown)Ownable(msg.sender){
         yieldDeviation = _yieldDeviation;
         strategyManager = IStrategyManager(_strategyManager);
         rebalanceCooldown = _rebalanceCooldown;
