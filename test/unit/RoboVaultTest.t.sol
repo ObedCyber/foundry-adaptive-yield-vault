@@ -35,7 +35,6 @@ contract RoboVaultTest is Test {
                     address(vault), 
                     owner, 
                     minAPY, 
-                    _rebalanceCooldown,
                     address(usdc)
         );
         vm.prank(address(vault));

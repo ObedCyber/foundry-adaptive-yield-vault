@@ -4,57 +4,30 @@ pragma solidity ^0.8.24;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IStrategy} from "./IStrategy.sol";
-
+import {IStrategy} from "./interfaces/IStrategy.sol";
+import {StrategyErrors} from "./errors/StrategyErrors.sol";
 
 /**
- * A Strategy Manager contract acts as the controller or router between your vault and strategies. Its purpose is to coordinate how funds are allocated between different strategies, enforce constraints, and manage strategy lifecycle.
- * 
- * minimum APY enforced on all strategies, makes sure no assets in deposited in a strategy blow a certain APY.
- * It can select between multiple strategies and picks the one with the best APY.
- * It can decide to withdraw from the strategy just to secure profits
- * It can deactivate and activate any strategy
- * 
- * if vault wants to make deposit, it calls strategy manager first to check for the best APY's on different strategies and vault's makes the deposit.
- * Also the RoboKeeper will check from time to time that the vault's deposits are in the best APY and if not it will call the withdraw function and check for the next highest strategy and make the deposit there.
- * 
- * 
+ * @title StrategyManager
+ * @author Obed Okoh
+ * @notice This contract manages multiple investment strategies, allowing for the allocation and reallocation of funds based on strategy performance.
+ * It interacts with a vault to receive and withdraw funds, and it can activate or deactivate strategies as needed.
  */
 
-contract StrategyManager is Ownable{
+contract StrategyManager is Ownable, StrategyErrors{
     using SafeERC20 for IERC20;
 
     address immutable i_vault;
     address public roboKeeper;
     uint256 minimumAPY;
-    uint256 public rebalanceCooldown; // cooldown period for rebalancing 
     uint256 public lastRebalanceTimestamp; // timestamp of the last rebalance
     StrategyData[] strategies;
     IERC20 public underlying;
     uint256 public currentStrategyIndex;
     uint256 public totalBalanceAcrossStrategies;
-    // this is a mapping of strategy index to strategy address
-    // it is used to keep track of the current strategy index
-    // rather than
+
     mapping (uint256  => address ) strategy;
     
-
-    error StrategyManager__NotVault();
-    error StrategyManager__NonZeroAddress();
-    error StrategyManager__InvalidIndex();
-    error StrategyManager__StrategyAlreadyActive();
-    error StrategyManager__CannotDeactivateStrategyWithFunds();
-    error StrategyManager__InsufficientBalance();
-    error StrategyManager__InsufficientAllowance();
-    error StrategyManager__InvalidAmount();
-    error StrategyManager__InactiveStrategy();
-    error StrategyManager__TransactionFailed();
-    error StrategyManager__InsufficientBalanceInStrategy();
-    error StrategyManager__NoBestStrategy();
-    error StrategyManager__CurrentStrategyIsBestStrategy();
-    error StrategyManager__CannotSetRoboKeeper();
-    error StrategyManager__NotRoboKeeper();
-
 
     event StrategyAdded(address indexed strategyAddress);
     event StrategyActivated(address indexed strategyAddress);
@@ -80,11 +53,10 @@ contract StrategyManager is Ownable{
         address vault, 
         address owner, 
         uint256 minAPY, 
-        uint256 _rebalanceCooldown,
         address _underlying) Ownable(owner){
+        if(vault == address(0) || owner == address(0) || minAPY == 0 || _underlying == address(0)) revert StrategyManager__InvalidConstructorParameters();
         i_vault = vault;
         minimumAPY = minAPY;
-        rebalanceCooldown = _rebalanceCooldown;
         underlying = IERC20(_underlying);
     }
 
@@ -94,8 +66,30 @@ contract StrategyManager is Ownable{
         _;
     }
 
+            //////////////////////////////////////////////////////////
+            ////////////////// ONLY OWNER FUNCTIONS //////////////////
+            //////////////////////////////////////////////////////////
 
-    
+    /**
+     * @dev Updates the minimum APY required for strategies.
+     * @param newMinAPY The new minimum APY to be set.
+     */
+    function updateMinimumAPY(uint256 newMinAPY) public onlyOwner {
+        minimumAPY = newMinAPY;
+    }
+
+    /**
+     * @dev Sets the roboKeeper address.
+     * @param _roboKeeper The address of the new roboKeeper.
+     */
+    function setRoboKeeper(address _roboKeeper) public onlyOwner{
+
+        if(roboKeeper != address(0) || _roboKeeper == address(0)){
+            revert StrategyManager__CannotSetRoboKeeper();
+        }
+        roboKeeper = _roboKeeper;
+    }
+
     // @dev Adds a new strategy to the manager.
     /// @param _strategyAddress The address of the strategy to be added.
     /// @notice This function can only be called by the owner of the contract.
@@ -146,6 +140,10 @@ contract StrategyManager is Ownable{
         emit StrategyDeactivated(strategyData.strategyAddress);
     }
 
+            //////////////////////////////////////////////////////////
+            ////////////////// CORE FUNCTIONS ///////////////////////
+            //////////////////////////////////////////////////////////
+
     // @dev Refreshes the APYs of all strategies.
     /// @notice This function can be called by anyone to update the APY estimates for all strategies.
     /// @dev It iterates through all strategies, calls the estimateAPY function on each strategy, and updates the lastRecordedAPY field.
@@ -155,19 +153,6 @@ contract StrategyManager is Ownable{
             StrategyData storage strategyData = strategies[i];
             strategyData.lastRecordedAPY = IStrategy(strategyData.strategyAddress).estimateAPY();
         }
-    }
-
-    function updateMinimumAPY(uint256 newMinAPY) public onlyOwner {
-        minimumAPY = newMinAPY;
-    }
-
-
-    function setRoboKeeper(address _roboKeeper) public onlyOwner{
-
-        if(roboKeeper != address(0) || _roboKeeper == address(0)){
-            revert StrategyManager__CannotSetRoboKeeper();
-        }
-        roboKeeper = _roboKeeper;
     }
 
 
@@ -189,20 +174,12 @@ contract StrategyManager is Ownable{
         address strategyAddr = strategyData.strategyAddress;
         currentStrategyIndex = index;
         
-        uint256 balanceBefore = IStrategy(strategyAddr).getVaultBalance();
         IStrategy(strategyAddr).deposit(amount);
-        uint256 balanceAfter = IStrategy(strategyAddr).getVaultBalance();
-
-        if (balanceAfter != balanceBefore + amount) {
-            revert StrategyManager__TransactionFailed();
-        }
-
+   
         emit Allocationsuccessful(strategyAddr, amount);
     }
 
     function withdraw(uint256 amount, uint256 index) internal {
-        // revert for invalid amount
-        if(amount == 0){ revert StrategyManager__InvalidAmount();}
         address strategyAddr = getStrategyAddress(index);
         // revert if amount is more than balance in strategy
         if(amount > IStrategy(strategyAddr).getVaultBalance()){
@@ -214,19 +191,7 @@ contract StrategyManager is Ownable{
         emit WithdrawalSuccessful(strategyAddr, amount);
     }
 
-    //withdrawal function to be called only by the vault incase a user wants to withdraw and there's not
-    // enough liquidity in the vault, it will call this function to withdraw from the strategy
-    function withdrawToVault(uint256 amount) external onlyVault {
-        refreshAPYs();
-        // flow goes from strategy -> manager -> vault
-        if (amount == 0) revert StrategyManager__InvalidAmount();
-        address strategyAddr = getStrategyAddress(currentStrategyIndex);
-        if(IStrategy(strategyAddr).getVaultBalance() != 0){
-            IStrategy(strategyAddr).withdraw(amount);
-        }
-        underlying.safeTransfer(i_vault, amount); // transfer the withdrawn amount to the vault
-        emit WithdrawalToVaultSuccessful(strategyAddr, amount);
-    }
+    
 
     // @dev Rebalances the strategies based on their APYs.
     // We are assuming only one strategy can hold the underlying tokens.
@@ -235,6 +200,7 @@ contract StrategyManager is Ownable{
 
     function Rebalance() external {
         if(msg.sender != roboKeeper) revert StrategyManager__NotRoboKeeper();
+         
         refreshAPYs();
 
         uint256 bestStrategyIndex = getBestAPYStrategy();
@@ -242,16 +208,9 @@ contract StrategyManager is Ownable{
         
         // If no funds are allocated anywhere, just deposit directly
         if (getTotalBalanceAcrossStrategies() == 0) {
-            allocate(underlying.balanceOf(i_vault), bestStrategyIndex);
+            allocate(underlying.balanceOf(address(this)), bestStrategyIndex);
             return;
         }
-
-        // If we're already in the best strategy, skip
-        // RoboKeeper already does this check
-/*         if (currentStrategyIndex == bestStrategyIndex) {
-            return;
-        } */
-        lastRebalanceTimestamp = block.timestamp;
 
         // Withdraw from current strategy & allocate to best one
         withdraw(underlying.balanceOf(address(this)), currentStrategyIndex);
@@ -259,6 +218,10 @@ contract StrategyManager is Ownable{
 
         emit RebalanceSuccessful(bestStrategyAddr, underlying.balanceOf(address(this)));
     }
+
+            //////////////////////////////////////////////////////////
+            ////////////////// PUBLIC VIEW FUNCTIONS /////////////////
+            //////////////////////////////////////////////////////////
 
 
     // @dev Return the best APY strategy.
@@ -270,7 +233,6 @@ contract StrategyManager is Ownable{
         uint256 len = strategies.length;
         for (uint256 i = 0; i < len; i++) {
             StrategyData storage strategyData = strategies[i];
-            // 
             // strategy must be active
             // strategy last recorderd APY must be greater than the current highest APY
             // strategy last recorded APY must be greater than or equal to the minimum APY
@@ -298,8 +260,37 @@ contract StrategyManager is Ownable{
         }
         return totalBalance;
     }
+            //////////////////////////////////////////////////////////
+            ////////////////// ONLY VAULT FUNCTIONS //////////////////
+            //////////////////////////////////////////////////////////
 
-    // get strategy address by index
+    /**
+     * @dev Withdraws a specified amount from the current strategy to the vault.
+     * @param amount The amount to withdraw to the vault.
+     */
+    function withdrawToVault(uint256 amount) external onlyVault {
+        refreshAPYs();
+        // flow goes from strategy -> manager -> vault
+        if (amount == 0) revert StrategyManager__InvalidAmount();
+        address strategyAddr = getStrategyAddress(currentStrategyIndex);
+        if(IStrategy(strategyAddr).getVaultBalance() != 0){
+            IStrategy(strategyAddr).withdraw(amount);
+        }
+        underlying.safeTransfer(i_vault, amount); 
+        emit WithdrawalToVaultSuccessful(strategyAddr, amount);
+    }
+
+           
+
+            //////////////////////////////////////////////////////////
+            ////////////////// GETTER FUNCTIONS //////////////////////
+            //////////////////////////////////////////////////////////
+   
+   /**
+    * @dev Returns the address of the strategy at the specified index.
+    * @param index The index of the strategy in the strategies array.
+    * @return The address of the strategy.
+    */
     function getStrategyAddress(uint256 index) public view returns (address) {
         if (index >= strategies.length) {
             revert StrategyManager__InvalidIndex();
@@ -307,24 +298,44 @@ contract StrategyManager is Ownable{
         return strategies[index].strategyAddress;
     }
 
+    /**
+     * @dev Returns the address of the current strategy.
+     * @return currentStrategyAddress The address of the current strategy.
+     */
     function getCurrentStrategyAddress() public view returns (address currentStrategyAddress) {
         currentStrategyAddress = getStrategyAddress(currentStrategyIndex);
     }
 
+    /**
+     * @dev Returns the index of the current strategy.
+     * @return The index of the current strategy.
+     */
     function getCurrentStrategyIndex() public view returns(uint256){
         return currentStrategyIndex;
     }
 
+    /**
+     * @dev Returns the minimum APY required for strategies.
+     * @return The minimum APY.
+     */
     function getMinimumAPY() public view returns (uint256) {
         return minimumAPY;
     }
 
+    /**
+     * @dev Returns the address of the keeper.
+     * @return The address of the keeper.
+     */
     function getRoboKeeper() public view returns (address) {
         return roboKeeper;
     }
 
 
-    // get strategy APY by index
+    /**
+     * @dev Returns the APY of the strategy at the specified index.
+     * @param index The index of the strategy in the strategies array.
+     * @return The APY of the strategy.
+     */
     function getStrategyAPY(uint256 index) public view returns (uint256) {
         if (index >= strategies.length) {
             revert StrategyManager__InvalidIndex();
@@ -332,6 +343,11 @@ contract StrategyManager is Ownable{
         return strategies[index].lastRecordedAPY;
     }
 
+    /**
+     * @dev Checks if the strategy at the specified index is active.
+     * @param index The index of the strategy in the strategies array.
+     * @return True if the strategy is active, false otherwise.
+     */
     function checkIfStrategyIsActive(uint256 index) public view returns (bool) {
         if (index >= strategies.length) {
             revert StrategyManager__InvalidIndex();

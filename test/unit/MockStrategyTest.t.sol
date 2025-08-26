@@ -2,13 +2,11 @@
 pragma solidity ^0.8.24;
 
 import {Test, console} from "forge-std/Test.sol";
-import {RoboVault} from "../../src/RoboVault.sol";
 import {USDCMock} from "../mocks/USDCMock.sol";
 import {StrategyManager} from "../../src/StrategyManager.sol";
 import {Mockstrategy} from "../../src/MockStrategy.sol";
 
 contract MockStrategyTest is Test {
-    RoboVault vault;
     USDCMock usdc;
     StrategyManager manager;
     Mockstrategy strategy;
@@ -17,6 +15,7 @@ contract MockStrategyTest is Test {
     uint256 WITHDRAWAL_PERIOD = 22 days;
     address bob = makeAddr("bob");
     address owner = makeAddr("owner");
+    address vault = makeAddr("vault");
 
     error InvalidAmount();
     error NonZeroAddress();
@@ -32,7 +31,7 @@ contract MockStrategyTest is Test {
 
     function setUp() public {
         usdc = new USDCMock();
-        manager = new StrategyManager(address(0), address(owner), 1000, 7 days, address(usdc));
+        manager = new StrategyManager(vault, address(owner), 1000, address(usdc));
         strategy = new Mockstrategy("MockStrategy", 100, address(manager), address(usdc));
 
         usdc.mint(address(strategy), 100e18);
@@ -177,6 +176,8 @@ contract MockStrategyTest is Test {
         // Should revert with NotStrategy, so APY should not change
         assertTrue(!success);
     }
+
+    
 
     function testStrategyNameReturnsCorrectName() public view {
         assertEq(strategy.strategyName(), "MockStrategy");

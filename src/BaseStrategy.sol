@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/// @notice Common errors for strategy contracts
+/**
+ * @title BaseStrategy
+ * @author Obed Okoh
+ * @notice This abstract contract defines the interface for investment strategies.
+ * All strategy implementations should inherit from this contract and implement its functions.
+ */
 
 abstract contract BaseStrategy {
-    /// @notice Vault that controls this strategy
 
     /// @notice Deposit assets into the strategy
     function deposit(uint256 assets) external virtual returns(uint256 sharesMinted);

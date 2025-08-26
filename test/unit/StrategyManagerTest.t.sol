@@ -40,6 +40,7 @@ contract StrategyManagerTest is Test {
     error StrategyManager__CurrentStrategyIsBestStrategy();
     error StrategyManager__CannotSetRoboKeeper();
     error StrategyManager__NotRoboKeeper();
+    error StrategyManager__InvalidConstructorParameters();
 
     event StrategyAdded(address indexed strategyAddress);
     event StrategyActivated(address indexed strategyAddress);
@@ -56,7 +57,6 @@ contract StrategyManagerTest is Test {
                     address(vault), 
                     owner, 
                     minAPY, 
-                    _rebalanceCooldown,
                     address(usdc)
         );
         strategy = new Mockstrategy(
@@ -84,6 +84,17 @@ contract StrategyManagerTest is Test {
         
         vm.stopPrank();
         _;
+    }
+
+    function testCannotDeployManagerWithEmptyParameters() public {
+    
+        vm.expectRevert(abi.encodeWithSelector(StrategyManager__InvalidConstructorParameters.selector));
+        manager = new StrategyManager(
+                    address(0), 
+                    owner, 
+                    minAPY, 
+                    address(0)
+        );
     }
 
     function testNonOwnerCannotAddStrategy()public {
