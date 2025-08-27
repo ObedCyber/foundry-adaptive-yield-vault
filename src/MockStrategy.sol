@@ -99,10 +99,11 @@ contract Mockstrategy is BaseStrategy, ERC20, StrategyErrors, ReentrancyGuard {
     function withdraw(
         uint256 assets
     ) external override nonReentrant onlyManager returns (uint256) {
-        accrueInterest();
-        if (assets == 0) revert MockStrategy__InvalidAmount();
+if (assets == 0) revert MockStrategy__InvalidAmount();
         if (block.timestamp - lastDepositTimestamp <= withdrawalPeriod)
             revert MockStrategy__InvalidWithdrawalPeriod();
+
+        accrueInterest();
 
         uint256 amountToWithdraw = assets;
 
