@@ -5,7 +5,7 @@ import {Test, console} from "forge-std/Test.sol";
 import {RoboVault} from "../../src/RoboVault.sol";
 import {USDCMock} from "../mocks/USDCMock.sol";
 import {StrategyManager} from "../../src/StrategyManager.sol";
-import {Errors} from "../../src/Errors.sol";
+import {Errors} from "../../src/errors/Errors.sol";
 
 contract RoboVaultTest is Test {
     RoboVault vault;
